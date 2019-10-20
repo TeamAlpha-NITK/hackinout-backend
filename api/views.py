@@ -1,12 +1,13 @@
 import os
 import re
 import mimetypes
+import random
 from wsgiref.util import FileWrapper
 
-from django.http.response import StreamingHttpResponse, HttpResponse
+from django.http.response import StreamingHttpResponse, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404
 from django.conf import settings
-from .models import Video, FrameObjectData
+from .models import Video, FrameObjectData, Ad
 from .util import RangeFileWrapper
 
 from .yolov3.detect import detect
@@ -79,5 +80,83 @@ def upload(request):
 def search():
     pass
 
-def new_ad():
-    pass
+def new_ad(request):
+    post_data = request.POST
+    print(post_data)
+    try:
+        ad = Ad(
+            redirect_link=post_data['redirect_link'],
+            category=post_data['category'],
+            object=post_data['object'],
+            image_link=post_data['image_link']
+        )
+        ad.save()
+    except KeyError:
+        return HttpResponse(content="Form incomplete", status=400)
+    except Exception as err:
+        print(err)
+        return HttpResponse(content="Internal Server Error", status=500)
+
+def get_video(request, video_id):
+    try:
+        video = get_object_or_404(Video, pk=video_id)
+        possible_ads = Ad.objects.filter(category=video.category)
+        frame_data = FrameObjectData.objects.filter(video=video)
+        objects = {}
+        for frame in frame_data:
+            if frame.object not in objects:
+                objects[frame.object] = 0
+            objects[frame.object] += frame.quantity
+        
+        possible_ads_ = possible_ads
+        for _ in objects:
+            if len(possible_ads_) <= 3:
+                break
+            possible_ads = possible_ads_
+            max_key = max(objects.keys(), key=(lambda k: objects[k]))
+            objects.pop(max_key, None)
+            possible_ads_ = possible_ads_.filter(object=max_key)
+        
+        if 3 >= len(possible_ads_) > 0:
+            possible_ads = possible_ads_
+        
+        if len(possible_ads) == 0:
+            result = {
+                "video": {
+                    "title": video.title,
+                    "description": video.description,
+                    "category": video.category
+                },
+                "ad_data": {}
+            }
+
+            return JsonResponse(result, status=200)
+        
+        ad = random.choice(possible_ads)
+
+        max_occurences = -1
+        best_frame = 0
+        for frame in frame_data:
+            if frame.object == ad.object and frame.quantity > max_occurences:
+                max_occurences = frame.quantity
+                best_frame = frame.frame_no
+        
+        result = {
+            "video": {
+                "title": video.title,
+                "description": video.description,
+                "category": video.category
+            },
+            "ad_data": {
+                "redirect_link": ad.redirect_link,
+                "image_link": ad.image_link,
+                "category": ad.category,
+                "object": ad.object,
+                "best_frame": best_frame
+            }
+        }
+
+        return JsonResponse(result, status=200)
+    except Exception as err:
+        print(err)
+        return HttpResponse(content="Internal Server Error", status=500)

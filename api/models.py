@@ -32,3 +32,20 @@ class FrameObjectData(models.Model):
 
     def __str__(self):
         return "[{} - {}] {}: {}\n".format(self.video.title, self.frame_no, self.object, self.quantity)
+
+
+class Ad(models.Model):
+
+    CATEGORY_CHOICES = [
+        ('Sports', 'Sports'),
+        ('Kids', 'Kids'),
+        ('News', 'News'),
+        ('Politics', 'Politics'),
+        ('Music', 'Music'),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    redirect_link = models.TextField()
+    category = models.TextField(choices=CATEGORY_CHOICES)
+    object = models.TextField()
+    image_link = models.TextField()
