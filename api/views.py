@@ -7,8 +7,7 @@ from django.http.response import StreamingHttpResponse, HttpResponse
 from django.shortcuts import get_object_or_404
 from django.conf import settings
 from .models import Video, FrameObjectData
-from .util import RangeFileWrapper
-
+from .util import RangeFileWrapper, get_objs_for_query, rank_videos
 from .yolov3.detect import detect
 
 
@@ -76,8 +75,14 @@ def upload(request):
         print(err)
         return HttpResponse(content="Internal Server Error", status=500)
 
-def search():
-    pass
+def search(request):
+    post_data = request.POST
+    print(post_data)
+    try:
+        return JsonResponse(rank_videos(get_objs_for_query(post_data)), status=200)
+    except Exception as err:
+        print(err)
+        return HttpResponse(content="Internal Server Error", status=500)
 
 def new_ad():
     pass
