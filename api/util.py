@@ -3,6 +3,7 @@ import spacy
 import operator
 from spacy.lang.en.stop_words import STOP_WORDS
 from .models import Video, FrameObjectData
+from django.db.models import Sum
 
 
 class RangeFileWrapper(object):
@@ -38,9 +39,9 @@ class RangeFileWrapper(object):
 
 def get_objs_for_query(search_query):
 
-    nlp = spacy.load('en_core_web_sm')
+    nlp = spacy.load('en_core_web_md')
 
-    with open('classes.txt') as f:
+    with open('api/classes.txt') as f:
         object_set = f.readlines()
     object_set = [x.strip() for x in object_set] 
 
@@ -65,36 +66,49 @@ def get_objs_for_query(search_query):
     for token in filtered_tokens:
         for object in object_set:
             similarity = token.similarity(nlp(object)) # check if similarity function works on lemma_ of a token
-            if token.text not in query_tokens_objects:
-                query_tokens_objects[token] = []
+            if object in query_tokens_objects:
+                continue
             if similarity >= threshold:
-                query_tokens_objects[token].append((object, similarity))
-            if similarity == 1.0 :
+                query_tokens_objects[object] = 1
+            if similarity == 1.0:
                 found_match = True
                 break
-        if not found_match:
+        # if not found_match:
             # sort based on similarity
-            query_tokens_objects[token].sort(key=operator.itemgetter(1), reverse=True)
+            # query_tokens_objects[token].sort(key=operator.itemgetter(1), reverse=True)
             # get top three
-            query_tokens_objects[token] = query_tokens_objects[token][:3]
+            # query_tokens_objects[token] = query_tokens_objects[token][:3]
+    print(query_tokens_objects)
     return query_tokens_objects
 
 
 def rank_videos(query_tokens_objects):
     query_token_videos = {}
-    for query_token, objects in query_tokens_objects:
-        for object, _ in objects: 
-            query_token_videos[query_token] += get_videos(object)
+    # for query_token, objects in query_tokens_objects.items():
+    #     # print("yo", query_token)
+    #     for object, _ in objects:
+    #         if query_token.text not in query_token_videos: 
+    #             query_token_videos[query_token.text] = []
+    #         query_token_videos[query_token.text] += get_videos(object)
+
+    # print(query_token_videos)
     return query_token_videos
 
-def get_videos(object):
+def get_videos(objects_dict):
+    objects = [k for k in objects_dict.keys()]
     video_list = []
-    videos = FrameObjectData.objects.filter(object='person').values('video').annotate(total=Sum('quantity')).order_by('total').reverse()
-    for video in videos:
-        video_obj = Video.objects.get(id=video['video'])
+    frames = FrameObjectData.objects.filter(object__in=objects)
+    d = {}
+    for frame in frames:
+        # video_obj = Video.objects.get(id=video['video'])
+        video = frame.video
+        if video.id in d:
+            continue
+        d[video.id] = 1
         video_list.append({
-            "id": video_obj.id,
-            "title": video_obj.title,
-            "description": video_obj.description,
-            "category": video_obj.category
+            "id": video.id,
+            "title": video.title,
+            "description": video.description,
+            "category": video.category
         })
+    return video_list

@@ -8,7 +8,7 @@ from django.http.response import StreamingHttpResponse, HttpResponse, JsonRespon
 from django.shortcuts import get_object_or_404
 from django.conf import settings
 from .models import Video, FrameObjectData, Ad
-from .util import RangeFileWrapper, get_objs_for_query, rank_videos
+from .util import RangeFileWrapper, get_objs_for_query, get_videos
 from .yolov3.detect import detect
 
 
@@ -80,7 +80,9 @@ def search(request):
     post_data = request.POST
     print(post_data)
     try:
-        return JsonResponse(rank_videos(get_objs_for_query(post_data)), status=200)
+        response = {"videos": get_videos(get_objs_for_query(post_data['query']))}
+        print(response)
+        return JsonResponse(response, status=200)
     except Exception as err:
         print(err)
         return HttpResponse(content="Internal Server Error", status=500)
@@ -105,8 +107,10 @@ def new_ad(request):
 def get_video(request, video_id):
     try:
         video = get_object_or_404(Video, pk=video_id)
+        print(video.title)
         possible_ads = Ad.objects.filter(category=video.category)
         frame_data = FrameObjectData.objects.filter(video=video)
+        # print(frame_data)
         objects = {}
         for frame in frame_data:
             if frame.object not in objects:
@@ -142,7 +146,9 @@ def get_video(request, video_id):
         max_occurences = -1
         best_frame = 0
         for frame in frame_data:
+            # print(frame)
             if frame.object == ad.object and frame.quantity > max_occurences:
+                # print(frame)
                 max_occurences = frame.quantity
                 best_frame = frame.frame_no
         
@@ -162,6 +168,22 @@ def get_video(request, video_id):
         }
 
         return JsonResponse(result, status=200)
+    except Exception as err:
+        print(err)
+        return HttpResponse(content="Internal Server Error", status=500)
+
+def all_videos(request):
+    try:
+        videos = Video.objects.all()
+        videos_list = []
+        for video in videos:
+            videos_list.append({
+                "id": video.id,
+                "title": video.title,
+                "description": video.description,
+                "category": video.category
+            })
+        return JsonResponse({"videos": videos_list}, status=200)
     except Exception as err:
         print(err)
         return HttpResponse(content="Internal Server Error", status=500)
